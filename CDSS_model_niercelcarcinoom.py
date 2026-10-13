@@ -2,7 +2,7 @@ import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from sklearn.datasets import load_iris
+
 
 def one_hot_encoding(y, num_classes):
     one_hot = np.zeros((len(y), num_classes))
@@ -15,13 +15,19 @@ def calculate_accuracy(Y_true, Y_pred):
     accuracy = correct_predictions / total_samples
     return accuracy
 
-# leeghalen voor uploaden naar github, voeg het pad naar het databestand toe en vervolgens na de komma sep=';' anders werkt het niet
-nier = pd.read_csv()
-nier_voorspellende_variabele = nier.drop(columns=[' vit_stat'])
-nier_doelvariabele = nier[' vit_stat']
+nier = pd.read_csv('')
+nier.columns = nier.columns.str.strip()   # veilig: haalt spaties weg als ze er wel zijn
 
-X = nier.iloc[:, :4]
-Y = nier[' vit_stat']
+nier_voorspellers = ['leeft', 'gesl', 'tumsoort', 'diffgrad', 'tum_afm', 'chemo', 'rt', 'okd']
+nier_doelvariabele = 'vit_stat'
+
+nier = nier[nier_voorspellers + [nier_doelvariabele]].dropna()
+
+X = nier[nier_voorspellers].to_numpy(dtype=float)
+Y = nier[nier_doelvariabele].to_numpy(dtype=int)
+
+print(nier.columns.tolist())
+print(X.shape, X.dtype)
 
 num_classes = len(np.unique(Y))
 Y_onehot = one_hot_encoding(Y, num_classes)
@@ -29,15 +35,13 @@ Y_onehot = one_hot_encoding(Y, num_classes)
 np.random.seed(42)
 
 train_indices = np.random.choice(len(X), size=int(0.8 * len(X)), replace=False)
+test_indices = np.setdiff1d(np.arange(len(X)), train_indices)
 
-X_train = X.iloc[train_indices, :]
+X_train = X[train_indices, :]
 Y_train = Y_onehot[train_indices, :]
 
-X_test = X.drop(train_indices, axis=0)
-Y_test = Y_onehot[np.setdiff1d(np.arange(len(X)), train_indices), :]
-
-X_train = X_train.to_numpy()
-X_test = X_test.to_numpy()
+X_test = X[test_indices, :]
+Y_test = Y_onehot[test_indices, :]
 
 def sigmoid(x):
     return 1 / (1 + np.e**-x)
@@ -105,3 +109,55 @@ def update_parameters(params, gradients, learning_rate):
     params['b2'] -= learning_rate * gradients['db2']
 
     return params
+
+print(X_train.dtype, X_train.shape)
+
+def train_mlp(X_train, Y_train, input_size, hidden_size, output_size, learning_rate, epochs):
+    params = initialize_parameters(input_size, hidden_size, output_size)
+
+    for epoch in range(1, epochs + 1):
+        cache = forward_propagation(X_train, params)
+        Y_pred = cache['A2']
+
+        loss = compute_loss(Y_train, Y_pred)
+
+        gradients = backward_propagation(X_train, Y_train, params, cache)
+
+        params = update_parameters(params, gradients, learning_rate)
+
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}, Loss: {loss:.6f}")
+
+    return params
+
+
+np.random.seed(42)
+
+input_size = X_train.shape[1]
+print(input_size)
+hidden_size = 3
+output_size = Y_train.shape[1]
+learning_rate = 0.5
+epochs = 50
+
+trained_params = train_mlp(X_train, Y_train, input_size, hidden_size, output_size, learning_rate, epochs)
+
+trained_params
+
+def predict_mlp(X, params):
+    cache = forward_propagation(X, params)
+    Y_pred = cache['A2']
+
+    predictions = np.argmax(Y_pred, axis=1)
+
+    return predictions
+
+Y_pred_test = predict_mlp(X_test, trained_params)
+
+# Convert Y_test from one-hot encoding to class labels
+Y_test_labels = np.argmax(Y_test, axis=1)
+
+# Calculate accuracy on the test set
+accuracy = calculate_accuracy(Y_test_labels, Y_pred_test)
+print(f"Accuracy on the test set: {accuracy * 100:.2f}%")
+
