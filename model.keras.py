@@ -17,7 +17,7 @@ def calculate_accuracy(Y_true, Y_pred):
     accuracy = correct_predictions / total_samples
     return accuracy
 
-keras = pd.read_csv('/Users/femkeboersma/Downloads/iknl_nier_syntheticdata.csv', sep=';')
+keras = pd.read_csv()
 keras.columns = keras.columns.str.strip()
 
 keras_voorspellers = ['leeft', 'gesl', 'tumsoort', 'diag_basis', 'gedrag','tum_afm', 'later', 'topo_sublok', 'pos_lymf']

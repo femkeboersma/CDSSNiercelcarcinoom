@@ -25,8 +25,8 @@ CREATE TABLE patient (
 INSERT INTO patient
   (display_name, leeft, gesl, tumsoort, diag_basis, gedrag, tum_afm, later, topo_sublok, pos_lymf)
 VALUES
-  ('Timmy Tim Tim Leipzig',  20, 1, 711100, 7, 2, 12, 2, C508, 55),
-  ('Roderick van Aszelt',    51, 2, 711310, 2, 3, 3, 1, C500, 0),
-  ('Jackie Bal',             48, 2, 452358, 5, 3, 10, 2, C501, 19),
-  ('Kees de Krentebol',      30, 1, 452355, 6, 3, 25, 2, C502, 20),
-  ('Lie Ting',               90, 2, 711100, 7, 2, 32, 1, C508, 35);
+  ('Timmy Tim Tim Leipzig',  20, 1, 711100, 7, 2, 12, 2, 'C508', 55),
+  ('Roderick van Aszelt',    51, 2, 711310, 2, 3, 3, 1, 'C500', 0),
+  ('Jackie Bal',             48, 2, 452358, 5, 3, 10, 2, 'C501', 19),
+  ('Kees de Krentebol',      30, 1, 452355, 6, 3, 25, 2, 'C502', 20),
+  ('Lie Ting',               90, 2, 711100, 7, 2, 32, 1, 'C508', 35);

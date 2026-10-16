@@ -19,12 +19,42 @@ import streamlit as st
 import prediction
 
 DB_FILE = Path(__file__).parent / "ehr.db"
+# Kans op overlijden of overleving, afhankelijk van wat het model voorspelt. Als het model de kans op overlijden voorspelt, dan is KANS_IS_OVERLIJDEN = True. Als het model de kans op overleving voorspelt, dan is KANS_IS_OVERLIJDEN = False.
+KANS_IS_OVERLIJDEN = True
 
-st.set_page_config(page_title="CDSS patients with renal cancer", page_icon=":hospital:", layout="centered")
-st.title("Clinical Decision Support System (CDSS) for Renal Cancer")
-st.caption("Technical demo only. Not intended for clinical decisions.")
+# Geeft beschrijving bij de kolomnamen in de database, en bij de codes in sommige kolommen.
+LABELS = {
+    "leeft": "Leeftijd (jaar)",
+    "gesl": "Geslacht",
+    "tumsoort": "Tumorsoort (code)",
+    "diag_basis": "Basis van de diagnose",
+    "gedrag": "Gedrag van de tumor",
+    "tum_afm": "Tumorgrootte (mm)",
+    "later": "Zijde",
+    "topo_sublok": "Lokalisatie (code)",
+    "pos_lymf": "Aantal positieve lymfeklieren",
+}
+CODES = {
+    "gesl": {1: "Man", 2: "Vrouw"},
+    "gedrag": {2: "In situ", 3: "Kwaadaardig"},
+    "later": {1: "Links", 2: "Rechts"},
+    "diag_basis": {
+        0: "alleen overlijdensverklaring beschikbaar",
+        1: "alleen klinisch onderzoek (anamnese en lichamelijk onderzoek)",
+        2: "klinisch-diagnostische onderzoeken, exploratieve chirurgie of obductie (zonder microscopisch bevestiging)",
+        4: "specifieke biochemische en/of immunologische laboratoriumonderzoeken",
+        5: "hematologische (beenmergcytologie = bijvoorbeeld beenmergpunctie, bloeduitstrijk) of cytologische bevestiging van de primaire tumor of metastasen, of microscopische bevestiging zeker, maar onduidelijk of dit cytologie of histologie betreft",
+        6: "histologische bevestiging uitsluitend van metastase(n), inclusief bij obductie",
+        7: "histologische bevestiging van de primaire tumor, of onduidelijk of histologische bevestiging de primaire tumor of een metastase betreft, obductie (met histologische bevestiging)"
+    },
+}
 
-# --- 1. Check that the files we need are there ------------------------------
+#Titel van de pagina
+st.set_page_config(page_title="Prognose hulp voor patiënten met een niercelcarcinoom", page_icon=":hospital:", layout="centered")
+st.title("Prognose hulp voor het gesprek met mantelzorgers van patiënten met een niercelcarcinoom")
+st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
+
+# controleert of de benodigde bestanden bestaan, anders stopt de app met een foutmelding
 if not DB_FILE.exists():
     st.error("ehr.db not found. Run `python setup_database.py` first (see the README).")
     st.stop()
@@ -34,9 +64,9 @@ if not prediction.MODEL_FILE.exists():
     st.stop()
 
 
-# --- 2. Load the model (once) and the patients (on every run) ---------------
-@st.cache_resource(max_entries=1)  # load the model only once, not on every click...
-def get_model(file_modified_time):  # ...but again whenever model.keras is replaced
+# Laadt het model eenmalig en de patienten opnieuw bij elke run
+@st.cache_resource(max_entries=1)  # laadt het model een keer, ipv bij elke muisklik
+def get_model(file_modified_time):  # laadt het model een keer opnieuw wanneer model.keras wordt aangepast
     return prediction.load_model()
 
 
@@ -77,67 +107,68 @@ if problem:
     st.error("Your model does not fit this app yet. " + problem)
     st.stop()
 
-# The blood pressure typed in by the user. None = use the value from the database.
-st.session_state.setdefault("userbp", None)
 
 
-def forget_userbp():
-    st.session_state.userbp = None
-
-
-# --- 3. The page -------------------------------------------------------------
-st.subheader("Patients")
-patient_id = st.radio(
-    "Select a patient",
+# Je kunt hier een patient kiezen uit een dropdown, en de gegevens van die patient worden getoond. 
+patient_id = st.selectbox(
+    "Kies een patiënt",
     options=list(patients),
     format_func=lambda pid: patients[pid]["display_name"],
-    on_change=forget_userbp,  # a new patient starts without a typed-in value
 )
 current_patient = patients[patient_id]
 
-results = st.container()  # filled in below, but shown here, above the form
+resultaat = st.container()  # wordt hieronder gevuld, maar staat bovenaan de pagina
 
-with st.form("patient_form2", clear_on_submit=True):
-    new_patient_form2 = st.number_input(
-        "If desired, enter a new values here",
-        min_value=1, max_value=400, value=None, step=1,
-        help="Leave empty and press Submit to go back to the value in the database.",
+# Gegevens van de patiënt in gewoon Nederlands
+st.subheader("Gegevens van de patiënt")
+weergave = {}
+for kolom, label in LABELS.items():
+    waarde = current_patient[kolom]
+    waarde = CODES.get(kolom, {}).get(waarde, waarde)
+    weergave[label] = str(waarde)
+st.table({"Gegeven": list(weergave.keys()), "Waarde": list(weergave.values())})
+
+# Hier kun je waarden aanpassen om te zien wat er gebeurt als de waarden anders zijn. De aanpassingen worden niet opgeslagen en gelden alleen voor deze berekening.
+aangepast = dict(current_patient)
+with st.expander("Wat als de waarden anders zijn? (optioneel)"):
+    st.caption("De aanpassingen worden niet opgeslagen en gelden alleen voor deze berekening.")
+    aangepast["leeft"] = st.number_input(
+        "Leeftijd (jaar)", min_value=0, max_value=120,
+        value=int(current_patient["leeft"]), key=f"leeft_{patient_id}",
     )
-    if st.form_submit_button("Submit"):
-        st.session_state.userbp = new_patient_form2  # used for this prediction only, not saved
-with results:
-    userbp = st.session_state.userbp
-    p = prediction.get_prediction(model, current_patient, userbp)
+    aangepast["tum_afm"] = st.number_input(
+        "Tumorgrootte", min_value=0, max_value=999,
+        value=int(current_patient["tum_afm"]), key=f"tum_afm_{patient_id}",
+    )
+    aangepast["pos_lymf"] = st.number_input(
+        "Aantal positieve lymfeklieren", min_value=0, max_value=99,
+        value=int(current_patient["pos_lymf"]), key=f"pos_lymf_{patient_id}",
+    )
 
-    st.markdown(f"**Current patient:** {current_patient['display_name']}")
-    st.markdown(f"**User-entered blood pressure:** {userbp if userbp is not None else 'none'}")
-    st.metric("Prediction", f"{p:.2f}")
-    st.caption("The model's output, between 0 and 1. Higher means the model thinks "
-               "death in five years is more likely. It is not a calibrated risk.")
+# Voorspelling berekenen en bovenaan tonen
+p = float(prediction.get_prediction(model, aangepast, None))
+overleving = 1 - p if KANS_IS_OVERLIJDEN else p
 
-    with st.expander("What the model receives"):
-        x = prediction.make_input(current_patient, userbp)[0]
-        st.table({"input": prediction.FEATURES, "value": [float(v) for v in x]})
-        with st.form("patient_form", clear_on_submit=True):
-            new_patient_form = st.number_input(
-        "If desired, enter a new values here",
-        min_value=1, max_value=400, value=None, step=1,
-        help="Leave empty and press Submit to go back to the value in the database.",)
-            if st.form_submit_button("Submit"):
-                st.session_state.userbp = new_patient_form  # used for this prediction only, not saved
-
-with results:
-    userbp = st.session_state.userbp
-    p = prediction.get_prediction(model, current_patient, userbp)
-
-    st.markdown(f"**Current patient:** {current_patient['display_name']}")
-    st.markdown(f"**User-entered blood pressure:** {userbp if userbp is not None else 'none'}")
-    st.metric("Prediction", f"{p:.2f}")
-    st.caption("The model's output, between 0 and 1. Higher means the model thinks "
-               "death in five years is more likely. It is not a calibrated risk.")
-
-    with st.expander("What the model receives"):
-        x = prediction.make_input(current_patient, userbp)[0]
-        st.table({"input": prediction.FEATURES, "value": [float(v) for v in x]})
-        
-        
+# Teksten die bij de voorspelling worden getoond. Het hangt af van of er dingen zijn aangepast welke teksten worden getoond.
+with resultaat:
+    st.subheader(current_patient["display_name"])
+    st.metric("Geschatte kans op overleving na 5 jaar", f"{overleving:.0%}")
+    st.progress(min(max(overleving, 0.0), 1.0))
+    st.write(
+        f"Van 100 vergelijkbare patiënten zijn er volgens het model ongeveer "
+        f"{round(overleving * 100)} na 5 jaar nog in leven."
+    )
+    if aangepast != current_patient:
+        st.warning("Let op: dit is berekend met aangepaste waarden.")
+    st.info(
+        "Dit is een schatting van een computermodel op basis van groepen patiënten. "
+        "Het zegt niets zeker over deze ene persoon. Gebruik het als hulp bij het gesprek, "
+        "niet als uitspraak."
+    )
+    with st.expander("Hoe kan ik dit uitleggen aan de mantelzorger?"):
+        st.write(
+            "- Dit is een schatting op basis van veel patiënten, niet een voorspelling voor deze persoon.\n"
+            "- Een percentage zegt niets over hoe de ziekte bij deze persoon precies verloopt.\n"
+            "- Vraag wat de mantelzorger zelf nodig heeft en bespreek mogelijkheden voor ondersteuning.\n"
+            "- Verwijs voor vragen over de behandeling naar de behandelend specialist."
+        )
