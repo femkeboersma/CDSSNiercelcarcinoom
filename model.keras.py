@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import keras as K
+from keras import layers
 from pathlib import Path
 
 def one_hot_encoding(y, num_classes):
@@ -24,7 +25,14 @@ keras_doelvariabele = 'target'
 
 keras = keras[keras_voorspellers + [keras_doelvariabele]].dropna()
 
-X = keras[keras_voorspellers].to_numpy(dtype=float)
+categorisch = ['topo_sublok']
+numeriek = [k for k in keras_voorspellers if k not in categorisch]
+
+keras['topo_sublok'] = keras['topo_sublok'].astype(str).str.strip()
+codes, categorieen = pd.factorize(keras['topo_sublok'])
+topo_onehot = one_hot_encoding(codes, len(categorieen))
+
+X = np.hstack([keras[numeriek].to_numpy(dtype=float), topo_onehot])
 Y = keras[keras_doelvariabele].to_numpy(dtype=int)
 
 print(keras.columns.tolist())
@@ -162,20 +170,17 @@ def predict_mlp(X, params):
 
 Y_pred_test = predict_mlp(X_test, trained_params)
 
-# Accuracy van jullie eigen netwerk
 Y_test_labels = np.argmax(Y_test, axis=1)
 accuracy = calculate_accuracy(Y_test_labels, Y_pred_test)
 print(f"Accuracy on the test set: {accuracy * 100:.2f}%")
 
-# --- Jullie getrainde gewichten overzetten naar een Keras-model ---
-# (K = de Keras-bibliotheek, want 'keras' is in dit script de DataFrame)
 W2 = trained_params['W2']
 b2 = trained_params['b2'].ravel()
 
 keras_model = K.Sequential([
     K.Input(shape=(input_size,)),
-    layers.Dense(hidden_size, activation='sigmoid'),   # = A1 in jullie code
-    layers.Dense(1, activation='sigmoid'),             # = kans op diabetes
+    layers.Dense(hidden_size, activation='sigmoid'),
+    layers.Dense(1, activation='sigmoid'),
 ])
 
 keras_model.set_weights([
@@ -185,9 +190,13 @@ keras_model.set_weights([
     np.array([b2[1] - b2[0]]),
 ])
 
-# Controle: moet True geven
 keras_pred = (keras_model.predict(X_test, verbose=0)[:, 0] >= 0.5).astype(int)
 print("Zelfde voorspellingen als ons eigen netwerk:", np.array_equal(keras_pred, Y_pred_test))
 
 keras_model.save("model.keras")
 print("Model opgeslagen als model.keras")
+
+print("NUMERIEK =", numeriek)
+print("CATEGORIEEN =", [str(c) for c in categorieen])
+print("GEMIDDELDE =", gemiddelde.tolist())
+print("STD =", std.tolist())

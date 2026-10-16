@@ -97,15 +97,14 @@ current_patient = patients[patient_id]
 
 results = st.container()  # filled in below, but shown here, above the form
 
-with st.form("bp_form", clear_on_submit=True):
-    new_bp = st.number_input(
-        "If desired, enter a new blood pressure value here",
+with st.form("patient_form2", clear_on_submit=True):
+    new_patient_form2 = st.number_input(
+        "If desired, enter a new values here",
         min_value=1, max_value=400, value=None, step=1,
         help="Leave empty and press Submit to go back to the value in the database.",
     )
     if st.form_submit_button("Submit"):
-        st.session_state.userbp = new_bp  # used for this prediction only, not saved
-
+        st.session_state.userbp = new_patient_form2  # used for this prediction only, not saved
 with results:
     userbp = st.session_state.userbp
     p = prediction.get_prediction(model, current_patient, userbp)
@@ -119,15 +118,13 @@ with results:
     with st.expander("What the model receives"):
         x = prediction.make_input(current_patient, userbp)[0]
         st.table({"input": prediction.FEATURES, "value": [float(v) for v in x]})
-        
-        with st.form("bp_form", clear_on_submit=True):
-            new_bp = st.number_input(
-        "If desired, enter a new blood pressure value here",
+        with st.form("patient_form", clear_on_submit=True):
+            new_patient_form = st.number_input(
+        "If desired, enter a new values here",
         min_value=1, max_value=400, value=None, step=1,
-        help="Leave empty and press Submit to go back to the value in the database.",
-    )
-    if st.form_submit_button("Submit"):
-        st.session_state.userbp = new_bp  # used for this prediction only, not saved
+        help="Leave empty and press Submit to go back to the value in the database.",)
+            if st.form_submit_button("Submit"):
+                st.session_state.userbp = new_patient_form  # used for this prediction only, not saved
 
 with results:
     userbp = st.session_state.userbp

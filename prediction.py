@@ -7,7 +7,12 @@ from pathlib import Path
 
 import numpy as np
 
-MODEL_FILE = Path('/Users/femkeboersma/Downloads/cdss_streamlit_demo-main/model.keras').parent / "model.keras"
+NUMERIEK = ['leeft', 'gesl', 'tumsoort', 'diag_basis', 'gedrag', 'tum_afm', 'later', 'pos_lymf']
+CATEGORIEEN = ['C508', 'C505', 'C504', 'C501', 'C502', 'C500', 'C503', 'C506', 'C509']
+GEMIDDELDE = np.array([61.90635416666667, 1.3799166666666667, 710409.0186458334, 6.7245625, 2.821083333333333, 16.033083333333334, 1.4696875, 2.6849583333333333, 0.24175, 0.07160416666666666, 0.3565625, 0.076, 0.11952083333333334, 0.014041666666666666, 0.0835, 0.008979166666666667, 0.028041666666666666])
+STD = np.array([14.120952268097733, 0.4853658342483117, 14106.399260776696, 1.0031143256178103, 0.38328252380646577, 25.362725053901592, 0.5503388220093683, 13.100103323315892, 0.42814359448688405, 0.2578313595795156, 0.47898401183533773, 0.2649981132007805, 0.32440037566656804, 0.11766264600073827, 0.2766364943388303, 0.09433207955215613, 0.16509188834470015])
+# MODEL_FILE = Path('/Users/femkeboersma/Downloads/CDSSNiercelcarcinoom/model.keras')
+MODEL_FILE = Path('/Users/femkeboersma/Documents/GitHub/CDSSNiercelcarcinoom/model.keras')
 
 # The model expects its 8 inputs in exactly this order (the column order of
 # the training data). These are also the column names in the database.
@@ -18,9 +23,8 @@ FEATURES = [
     "diag_basis",
     "gedrag",
     "tum_afm",
-    "chemo",
-    "rt",
-    "org_chir",
+    "later",
+    "topo_sublok",
     "pos_lymf"
 ]
 
@@ -43,26 +47,38 @@ def preprocess(x):
     """
     return x
 
+def make_input(values, vit_stat=None):
+    num = [float(values[k]) for k in NUMERIEK]
 
-def make_input(patient, vit_stat=None):
-    """Turn a patient (a dict with the FEATURES as keys) into the model's input.
+    topo = np.zeros(len(CATEGORIEEN))
+    code = str(values["topo_sublok"]).strip()
+    if code in CATEGORIEEN:
+        topo[CATEGORIEEN.index(code)] = 1
+    else:
+        print(f"Let op: onbekende topo_sublok {code}")
 
-    If vit_stat is given, it replaces the patient's stored value
-    for this prediction only (nothing is written to the database).
-    """
-    values = dict(patient)
-    if vit_stat is not None:
-        values["vit_stat"] = vit_stat
-    name = values.get("display_name", "this patient")
-    for feature in FEATURES:
-        if feature not in values:
-            raise ValueError(f"No value called '{feature}' for {name}. "
-                             "Do FEATURES and the database columns have the same names?")
-        if values[feature] is None:
-            raise ValueError(f"{name} has no value for '{feature}' (it is empty in the database). "
-                             "The model needs a number for every input.")
-    raw = np.array([[float(values[feature]) for feature in FEATURES]])
-    return preprocess(raw)
+    raw = np.array([num + topo.tolist()])
+    return (raw - GEMIDDELDE) / STD
+
+# def make_input(patient, vit_stat=None):
+#     """Turn a patient (a dict with the FEATURES as keys) into the model's input.
+
+#     If vit_stat is given, it replaces the patient's stored value
+#     for this prediction only (nothing is written to the database).
+#     """
+#     values = dict(patient)
+#     if vit_stat is not None:
+#         values["vit_stat"] = vit_stat
+#     name = values.get("display_name", "this patient")
+#     for feature in FEATURES:
+#         if feature not in values:
+#             raise ValueError(f"No value called '{feature}' for {name}. "
+#                              "Do FEATURES and the database columns have the same names?")
+#         if values[feature] is None:
+#             raise ValueError(f"{name} has no value for '{feature}' (it is empty in the database). "
+#                              "The model needs a number for every input.")
+#     raw = np.array([[float(values[feature]) for feature in FEATURES]])
+#     return preprocess(raw)
 
 
 def check_model(model, X):
