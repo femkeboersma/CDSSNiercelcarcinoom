@@ -18,7 +18,7 @@ def calculate_accuracy(Y_true, Y_pred):
     accuracy = correct_predictions / total_samples
     return accuracy
 
-keras = pd.read_csv()
+keras = pd.read_csv('__file__', sep=";")
 keras.columns = keras.columns.str.strip()
 
 keras_voorspellers = ['leeft', 'gesl', 'tumsoort', 'diag_basis', 'gedrag','tum_afm', 'later', 'topo_sublok', 'pos_lymf']
@@ -242,8 +242,7 @@ print("STD =", std.tolist())
 # resultaten = []
 # for hidden_size in [3, 8, 16, 32, 64]:
 #     for learning_rate in [0.05, 0.1, 0.5, 1.0]:
-#         params, val_loss, n_ep = train_mlp(X_fit, Y_fit, X_val, Y_val,
-#                                            hidden_size, learning_rate)
+#         params, val_loss, n_ep = train_mlp(X_fit, Y_fit, X_val, Y_val, hidden_size, learning_rate)
 #         p = predict_proba(X_val, params)
 #         auc = roc_auc_score(y_val, p)
 #         resultaten.append((auc, val_loss, hidden_size, learning_rate, n_ep))
