@@ -15,7 +15,7 @@ def calculate_accuracy(Y_true, Y_pred):
     accuracy = correct_predictions / total_samples
     return accuracy
 
-nier = pd.read_csv('')
+nier = pd.read_csv('iknl_nier_syntheticdata.csv', sep=";")
 nier.columns = nier.columns.str.strip()   # haalt spaties weg als ze er zijn
 
 nier_voorspellers = ['leeft', 'gesl', 'tumsoort', 'diag_basis', 'gedrag', 'stadium', 'horm', 'target','tum_afm', 'chemo', 'rt', 'org_chir', 'pos_lymf']

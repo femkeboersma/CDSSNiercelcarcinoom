@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import keras as K
 from keras import layers
 from pathlib import Path
+from sklearn.metrics import roc_auc_score, brier_score_loss
 
 def one_hot_encoding(y, num_classes):
     one_hot = np.zeros((len(y), num_classes))
@@ -17,7 +18,7 @@ def calculate_accuracy(Y_true, Y_pred):
     accuracy = correct_predictions / total_samples
     return accuracy
 
-keras = pd.read_csv()
+keras = pd.read_csv('__file__', sep=";")
 keras.columns = keras.columns.str.strip()
 
 keras_voorspellers = ['leeft', 'gesl', 'tumsoort', 'diag_basis', 'gedrag','tum_afm', 'later', 'topo_sublok', 'pos_lymf']
@@ -200,3 +201,62 @@ print("NUMERIEK =", numeriek)
 print("CATEGORIEEN =", [str(c) for c in categorieen])
 print("GEMIDDELDE =", gemiddelde.tolist())
 print("STD =", std.tolist())
+
+
+# def predict_proba(X, params):
+#     return forward_propagation(X, params)['A2'][:, 1]
+
+# def train_mlp(X_tr, Y_tr, X_va, Y_va, hidden_size, learning_rate,
+#               max_epochs=5000, patience=100, verbose=False):
+#     params = initialize_parameters(X_tr.shape[1], hidden_size, Y_tr.shape[1])
+#     best, best_params, wait = np.inf, None, 0
+#     for epoch in range(1, max_epochs + 1):
+#         cache = forward_propagation(X_tr, params)
+#         grads = backward_propagation(X_tr, Y_tr, params, cache)
+#         params = update_parameters(params, grads, learning_rate)
+
+#         val_loss = compute_loss(Y_va, forward_propagation(X_va, params)['A2'])
+#         if val_loss < best - 1e-5:
+#             best, wait = val_loss, 0
+#             best_params = {k: v.copy() for k, v in params.items()}
+#         else:
+#             wait += 1
+#             if wait >= patience:
+#                 break
+#         if verbose and epoch % 100 == 0:
+#             print(f"Epoch {epoch}, val loss {val_loss:.4f}")
+#     return best_params, best, epoch
+
+# # Validatieset uit de trainingsdata (de testset blijft ongemoeid)
+# rng = np.random.default_rng(42)
+# idx = rng.permutation(len(X_train))
+# n_val = int(0.2 * len(idx))
+# val_idx, fit_idx = idx[:n_val], idx[n_val:]
+# X_fit, Y_fit = X_train[fit_idx], Y_train[fit_idx]
+# X_val, Y_val = X_train[val_idx], Y_train[val_idx]
+# y_val = Y_val.argmax(axis=1)
+
+# print("Baseline accuracy (altijd meest voorkomende klasse):",
+#       max(y_val.mean(), 1 - y_val.mean()))
+
+# resultaten = []
+# for hidden_size in [3, 8, 16, 32, 64]:
+#     for learning_rate in [0.05, 0.1, 0.5, 1.0]:
+#         params, val_loss, n_ep = train_mlp(X_fit, Y_fit, X_val, Y_val, hidden_size, learning_rate)
+#         p = predict_proba(X_val, params)
+#         auc = roc_auc_score(y_val, p)
+#         resultaten.append((auc, val_loss, hidden_size, learning_rate, n_ep))
+#         print(f"hidden={hidden_size:3d} lr={learning_rate:<5} epochs={n_ep:4d} "
+#               f"val loss={val_loss:.4f} AUC={auc:.3f} Brier={brier_score_loss(y_val, p):.3f}")
+
+# resultaten.sort(reverse=True)
+# beste_auc, _, hidden_size, learning_rate, beste_epochs = resultaten[0]
+# print("Beste:", hidden_size, learning_rate, "AUC", round(beste_auc, 3))
+
+# trained_params, _, _ = train_mlp(X_fit, Y_fit, X_val, Y_val, hidden_size, learning_rate)
+# Y_pred_test = predict_mlp(X_test, trained_params)
+# p_test = predict_proba(X_test, trained_params)
+# y_test_labels = Y_test.argmax(axis=1)
+# print("Test AUC:  ", round(roc_auc_score(y_test_labels, p_test), 3))
+# print("Test Brier:", round(brier_score_loss(y_test_labels, p_test), 3))
+# print("Test acc:  ", round(calculate_accuracy(y_test_labels, Y_pred_test), 3))

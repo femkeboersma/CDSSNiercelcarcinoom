@@ -8,7 +8,7 @@ database.sql and re-run this script as often as you like.
 import sqlite3
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path('__file__').resolve().parent
 SQL_FILE = HERE / "database.sql"
 DB_FILE = HERE / "ehr.db"
 

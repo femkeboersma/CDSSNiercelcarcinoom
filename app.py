@@ -17,6 +17,7 @@ import numpy as np
 import streamlit as st
 
 import prediction
+from richtlijnen import kennisgebaseerd_advies, pictogram_html
 
 DB_FILE = Path(__file__).parent / "ehr.db"
 # Kans op overlijden of overleving, afhankelijk van wat het model voorspelt. Als het model de kans op overlijden voorspelt, dan is KANS_IS_OVERLIJDEN = True. Als het model de kans op overleving voorspelt, dan is KANS_IS_OVERLIJDEN = False.
@@ -109,7 +110,7 @@ if problem:
 
 
 
-# Je kunt hier een patient kiezen uit een dropdown, en de gegevens van die patient worden getoond. 
+# Je kunt hier een patient kiezen uit een dropdown, en de gegevens van die patient worden getoond.
 patient_id = st.selectbox(
     "Kies een patiënt",
     options=list(patients),
@@ -146,29 +147,68 @@ with st.expander("Wat als de waarden anders zijn? (optioneel)"):
     )
 
 # Voorspelling berekenen en bovenaan tonen
-p = float(prediction.get_prediction(model, aangepast, None))
-overleving = 1 - p if KANS_IS_OVERLIJDEN else p
+def voorspel_kans_overlijden(patient):
+    p = float(prediction.get_prediction(model, aangepast, None))
+    return p if KANS_IS_OVERLIJDEN else 1 - p
 
-# Teksten die bij de voorspelling worden getoond. Het hangt af van of er dingen zijn aangepast welke teksten worden getoond.
+#kennisgebaseerde deel
 with resultaat:
-    st.subheader(current_patient["display_name"])
-    st.metric("Geschatte kans op overleving na 5 jaar", f"{overleving:.0%}")
-    st.progress(min(max(overleving, 0.0), 1.0))
-    st.write(
-        f"Van 100 vergelijkbare patiënten zijn er volgens het model ongeveer "
-        f"{round(overleving * 100)} na 5 jaar nog in leven."
-    )
-    if aangepast != current_patient:
-        st.warning("Let op: dit is berekend met aangepaste waarden.")
-    st.info(
-        "Dit is een schatting van een computermodel op basis van groepen patiënten. "
-        "Het zegt niets zeker over deze ene persoon. Gebruik het als hulp bij het gesprek, "
-        "niet als uitspraak."
-    )
-    with st.expander("Hoe kan ik dit uitleggen aan de mantelzorger?"):
-        st.write(
-            "- Dit is een schatting op basis van veel patiënten, niet een voorspelling voor deze persoon.\n"
-            "- Een percentage zegt niets over hoe de ziekte bij deze persoon precies verloopt.\n"
-            "- Vraag wat de mantelzorger zelf nodig heeft en bespreek mogelijkheden voor ondersteuning.\n"
-            "- Verwijs voor vragen over de behandeling naar de behandelend specialist."
-        )
+    st.subheader(f"Gesprek met de mantelzorger van {current_patient['display_name']}")
+
+    def ja_nee(vraag, sleutel):
+        antwoord = st.radio(vraag, ["Ja", "Nee"], index=None, horizontal=True, key=f"{sleutel}_{patient_id}")
+        return None if antwoord is None else antwoord == "Ja"
+
+    toestemming = ja_nee("Heeft de patiënt toestemming gegeven om medische informatie met mantelzorger te delen?", "k1")
+    kan_ontvangen = wil_prognose = None
+    if toestemming:
+        kan_ontvangen = ja_nee("Kan de mantelzorger op dit moment informatie ontvangen? (Uw oordeel als huisarts)", "k2")
+    if toestemming and kan_ontvangen:
+        wil_prognose = ja_nee("Wil de mantelzorger informatie over de prognose?", "k3")
+
+# advies wordt pas getoond als hele flowchart is beantwoord
+    klaar = (toestemming is False or (toestemming and kan_ontvangen is False) or (toestemming and kan_ontvangen and wil_prognose is not None))
+
+    if not klaar:
+        st.caption("Beantwoord de vragen hierboven om het advies te zien.")
+    else:
+        r = kennisgebaseerd_advies(patient=aangepast, toestemming=toestemming, kan_ontvangen=bool(kan_ontvangen), wil_prognose=bool(wil_prognose), voorspel_kans=voorspel_kans_overlijden)
+
+        st.subheader("Advies")
+        for a in r.adviezen:
+            if a.code == "E":
+                st.success(f"**{a.conclusie}**")
+                st.markdown(pictogram_html(r.n_in_leven), unsafe_allow_html=True)
+                if aangepast != current_patient:
+                    st.warning("Let op: dit is berekend met aangepaste waarden.")
+                st.info(a.advies)
+            else:
+                st.info(f"**{a.conclusie}**\n\n{a.advies}")
+            st.caption(f"Advies {a.code} - Waarom: {a.reden} - Bron: {a.bron}")
+
+            with st.expander("Hoe komt dit advies tot stand?"):
+                st.write("Route door de flowchart: " + " → ".join(r.pad))
+
+# # Teksten die bij de voorspelling worden getoond. Het hangt af van of er dingen zijn aangepast welke teksten worden getoond.
+# with resultaat:
+#     st.subheader(current_patient["display_name"])
+#     st.metric("Geschatte kans op overleving na 5 jaar", f"{overleving:.0%}")
+#     st.progress(min(max(overleving, 0.0), 1.0))
+#     st.write(
+#         f"Van 100 vergelijkbare patiënten zijn er volgens het model ongeveer "
+#         f"{round(overleving * 100)} na 5 jaar nog in leven."
+#     )
+#     if aangepast != current_patient:
+#         st.warning("Let op: dit is berekend met aangepaste waarden.")
+#     st.info(
+#         "Dit is een schatting van een computermodel op basis van groepen patiënten. "
+#         "Het zegt niets zeker over deze ene persoon. Gebruik het als hulp bij het gesprek, "
+#         "niet als uitspraak."
+#     )
+#     with st.expander("Hoe kan ik dit uitleggen aan de mantelzorger?"):
+#         st.write(
+#             "- Dit is een schatting op basis van veel patiënten, niet een voorspelling voor deze persoon.\n"
+#             "- Een percentage zegt niets over hoe de ziekte bij deze persoon precies verloopt.\n"
+#             "- Vraag wat de mantelzorger zelf nodig heeft en bespreek mogelijkheden voor ondersteuning.\n"
+#             "- Verwijs voor vragen over de behandeling naar de behandelend specialist."
+#         )
