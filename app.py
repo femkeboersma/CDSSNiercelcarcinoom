@@ -129,27 +129,58 @@ for kolom, label in LABELS.items():
     weergave[label] = str(waarde)
 st.table({"Gegeven": list(weergave.keys()), "Waarde": list(weergave.values())})
 
-# Hier kun je waarden aanpassen om te zien wat er gebeurt als de waarden anders zijn. De aanpassingen worden niet opgeslagen en gelden alleen voor deze berekening.
+# Velden die de huisarts mag aanpassen: sleutel -> (label, minimum, maximum)
+VELDEN = {
+    "leeft": ("Leeftijd (jaar)", 0, 120),
+    "tum_afm": ("Tumorgrootte (mm)", 0, 999),
+    "pos_lymf": ("Aantal positieve lymfeklieren", 0, 99),
+}
+
+
+def toepassen(pid):
+    """Submit-knop: bewaar de ingevulde waarden voor deze patiënt."""
+    st.session_state[f"toegepast_{pid}"] = {
+        k: st.session_state[f"{k}_{pid}"] for k in VELDEN
+    }
+
+
+def resetten(pid, patient):
+    """Reset-knop: zet de velden terug op de waarden uit de database."""
+    for k in VELDEN:
+        st.session_state[f"{k}_{pid}"] = int(patient[k])
+    st.session_state.pop(f"toegepast_{pid}", None)
+
+
+# Startwaarden uit de database (alleen als het veld nog niet bestaat)
+for k in VELDEN:
+    st.session_state.setdefault(f"{k}_{patient_id}", int(current_patient[k]))
+
+with st.expander("Wat als de waarden anders zijn? (optioneel)", expanded=True):
+    st.caption("Pas de waarden aan en klik op 'Bereken opnieuw'. "
+               "Er wordt niets opgeslagen in de database.")
+    with st.form(f"wat_als_{patient_id}"):
+        for k, (label, minimum, maximum) in VELDEN.items():
+            st.number_input(label, min_value=minimum, max_value=maximum,
+                            key=f"{k}_{patient_id}")
+        knop1, knop2 = st.columns(2)
+        knop1.form_submit_button("Bereken opnieuw", type="primary",
+                                 on_click=toepassen, args=(patient_id,))
+        knop2.form_submit_button("Terug naar oorspronkelijke waarden",
+                                 on_click=resetten, args=(patient_id, current_patient))
+
+# Alleen de toegepaste waarden gaan naar het model
 aangepast = dict(current_patient)
-with st.expander("Wat als de waarden anders zijn? (optioneel)"):
-    st.caption("De aanpassingen worden niet opgeslagen en gelden alleen voor deze berekening.")
-    aangepast["leeft"] = st.number_input(
-        "Leeftijd (jaar)", min_value=0, max_value=120,
-        value=int(current_patient["leeft"]), key=f"leeft_{patient_id}",
-    )
-    aangepast["tum_afm"] = st.number_input(
-        "Tumorgrootte", min_value=0, max_value=999,
-        value=int(current_patient["tum_afm"]), key=f"tum_afm_{patient_id}",
-    )
-    aangepast["pos_lymf"] = st.number_input(
-        "Aantal positieve lymfeklieren", min_value=0, max_value=99,
-        value=int(current_patient["pos_lymf"]), key=f"pos_lymf_{patient_id}",
-    )
+aangepast.update(st.session_state.get(f"toegepast_{patient_id}", {}))
 
 # Voorspelling berekenen en bovenaan tonen
 def voorspel_kans_overlijden(patient):
     p = float(prediction.get_prediction(model, aangepast, None))
     return p if KANS_IS_OVERLIJDEN else 1 - p
+
+# Kans met de oorspronkelijke en met de aangepaste waarden, om te vergelijken
+kans_orig = float(prediction.get_prediction(model, current_patient, None))
+kans_orig = kans_orig if KANS_IS_OVERLIJDEN else 1 - kans_orig
+kans_nu = voorspel_kans_overlijden(aangepast)
 
 #kennisgebaseerde deel
 with resultaat:
@@ -180,7 +211,13 @@ with resultaat:
                 st.success(f"**{a.conclusie}**")
                 st.markdown(pictogram_html(r.n_in_leven), unsafe_allow_html=True)
                 if aangepast != current_patient:
-                    st.warning("Let op: dit is berekend met aangepaste waarden.")
+                    st.warning(
+                        f"Let op: dit is berekend met aangepaste waarden. "
+                        f"Kans op overlijden: {kans_nu:.1%} (met de oorspronkelijke "
+                        f"waarden: {kans_orig:.1%})."
+                    )
+                # if aangepast != current_patient:
+                #     st.warning("Let op: dit is berekend met aangepaste waarden.")
                 st.info(a.advies)
             else:
                 st.info(f"**{a.conclusie}**\n\n{a.advies}")
@@ -188,27 +225,3 @@ with resultaat:
 
             with st.expander("Hoe komt dit advies tot stand?"):
                 st.write("Route door de flowchart: " + " → ".join(r.pad))
-
-# # Teksten die bij de voorspelling worden getoond. Het hangt af van of er dingen zijn aangepast welke teksten worden getoond.
-# with resultaat:
-#     st.subheader(current_patient["display_name"])
-#     st.metric("Geschatte kans op overleving na 5 jaar", f"{overleving:.0%}")
-#     st.progress(min(max(overleving, 0.0), 1.0))
-#     st.write(
-#         f"Van 100 vergelijkbare patiënten zijn er volgens het model ongeveer "
-#         f"{round(overleving * 100)} na 5 jaar nog in leven."
-#     )
-#     if aangepast != current_patient:
-#         st.warning("Let op: dit is berekend met aangepaste waarden.")
-#     st.info(
-#         "Dit is een schatting van een computermodel op basis van groepen patiënten. "
-#         "Het zegt niets zeker over deze ene persoon. Gebruik het als hulp bij het gesprek, "
-#         "niet als uitspraak."
-#     )
-#     with st.expander("Hoe kan ik dit uitleggen aan de mantelzorger?"):
-#         st.write(
-#             "- Dit is een schatting op basis van veel patiënten, niet een voorspelling voor deze persoon.\n"
-#             "- Een percentage zegt niets over hoe de ziekte bij deze persoon precies verloopt.\n"
-#             "- Vraag wat de mantelzorger zelf nodig heeft en bespreek mogelijkheden voor ondersteuning.\n"
-#             "- Verwijs voor vragen over de behandeling naar de behandelend specialist."
-#         )
