@@ -74,10 +74,6 @@ def initialize_parameters(input_size, hidden_size, output_size):
     b1 = np.random.uniform(-0.5, 0.5, size=(1, hidden_size))
     W2 = np.random.uniform(-0.5, 0.5, size=(hidden_size, output_size))
     b2 = np.random.uniform(-0.5, 0.5, size=(1, output_size))
-    # W1 = np.random.uniform(-0.01, 0.01, size=(input_size, hidden_size))
-    # b1 = np.random.uniform(-0.01, 0.01, size=(1, hidden_size))
-    # W2 = np.random.uniform(-0.01, 0.01, size=(hidden_size, output_size))
-    # b2 = np.random.uniform(-0.01, 0.01, size=(1, output_size))
 
     return {"W1": W1, "b1": b1, "W2": W2, "b2": b2}
 
@@ -157,10 +153,10 @@ np.random.seed(42)
 
 input_size = X_train.shape[1]
 print(input_size)
-hidden_size = 8 # 3
+hidden_size = 16
 output_size = Y_train.shape[1]
-learning_rate = 0.5
-epochs = 500 # 50
+learning_rate = 1.0
+epochs = 5000
 
 trained_params = train_mlp(X_train, Y_train, input_size, hidden_size, output_size, learning_rate, epochs)
 
