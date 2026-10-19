@@ -52,9 +52,9 @@ VELDEN = {
 AFRONDING_CODES = {"F"}
 
 
-# Titel van de pagina, :orange[] zorgt ervoor dat de tekst in het oranje wordt weergegeven.
+# Titel van de pagina, :green[] zorgt ervoor dat de tekst in het oranje wordt weergegeven.
 st.set_page_config(page_title="Prognosegesprek met de mantelzorger", page_icon=":hospital:", layout="wide")
-st.title(":orange[Prognosegesprek] met de mantelzorger van een patiënt met een niercelcarcinoom")
+st.title(":green[Prognosegesprek] met de mantelzorger van een patiënt met een niercelcarcinoom")
 st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
 st.divider()  # scheidingslijn onder de kop
 
@@ -146,7 +146,7 @@ patient_id = st.session_state.patient_id
 current_patient = patients[patient_id]
 
 _, knop_kolom = st.columns([3, 1])
-knop_kolom.button("Andere patiënt kiezen", on_click=kies_andere_patient, use_container_width=True)
+knop_kolom.button("Andere patiënt kiezen", type="primary", on_click=kies_andere_patient, use_container_width=True)
 
 # Twee kolommen: links de patiëntgegevens, rechts het gesprek en de "Wat als"-velden
 links, midden, rechts = st.columns([1, 2, 1])
@@ -165,9 +165,10 @@ for kolom, label in LABELS.items():
     weergave[label] = str(waarde)
 
 with links:
-    st.subheader(":orange[Gegevens van de patiënt]")
-    tabel = pd.DataFrame({"Gegeven": weergave.keys(), "Waarde": weergave.values()})
-    st.table(tabel.set_index("Gegeven"))
+    with st.container(border=True):
+        st.subheader(":green[Gegevens van de patiënt]")
+        tabel = pd.DataFrame({"Gegeven": weergave.keys(), "Waarde": weergave.values()})
+        st.table(tabel.set_index("Gegeven"))
 
 # Beschrijft de functies van de knoppen in het "Wat als"-formulier.
 # De ingevulde waarden worden bewaard in st.session_state, zodat ze bij een volgende run van de app nog beschikbaar zijn.
@@ -218,7 +219,7 @@ kans_nu = voorspel_kans_overlijden(aangepast)
 
 # kennisgebaseerde deel, in het midden
 with resultaat:
-    st.subheader(f":orange[Gesprek met de mantelzorger van] {current_patient['display_name']}")
+    st.subheader(f":green[Gesprek met de mantelzorger van] {current_patient['display_name']}")
 
     def ja_nee(vraag, sleutel):
         antwoord = st.radio(vraag, ["Ja", "Nee"], index=None, horizontal=True, key=f"{sleutel}_{patient_id}")
@@ -239,7 +240,7 @@ with resultaat:
     else:
         r = kennisgebaseerd_advies(patient=aangepast, toestemming=toestemming, kan_ontvangen=bool(kan_ontvangen), wil_prognose=bool(wil_prognose), voorspel_kans=voorspel_kans_overlijden)
 
-        st.subheader(":orange[Advies]")
+        st.subheader(":green[Advies]")
         for a in r.adviezen:
             if a.code in AFRONDING_CODES:
                 continue  # de afronding staat in het rechterblok
@@ -261,13 +262,13 @@ with resultaat:
 # Rechterblok: eerst de opstart, daarna de afronding die bij de antwoorden past
 with zijblok:
     if not klaar:
-        st.subheader(":orange[Opstart van het gesprek]")
+        st.subheader(":green[Opstart van het gesprek]")
         st.write("- Zorg voor een rustige plek en voldoende tijd.\n"
                  "- Controleer of de patiënt toestemming heeft gegeven voor het delen van medische informatie met de mantelzorger.\n"
                  "- Vraag eerst wat de mantelzorger al weet. \n"
                  "- Doorloop de vragen op het formulier")
     else:
-        st.subheader(":orange[Afronding van het gesprek]")
+        st.subheader(":green[Afronding van het gesprek]")
 
         # De volgorde van de checks volgt de volgorde van de vragen
         if toestemming is False:
