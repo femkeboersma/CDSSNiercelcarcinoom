@@ -1,6 +1,6 @@
-"""A toy clinical decision support app.
+"""Een CDSS die berekent wat de kans is dat een patiënt met een niercelcarcinoom overlijdt, en geeft advies over het gesprek met de mantelzorger voor de huisarts.
 Run:  streamlit run app.py
-This is a technical demo. It is NOT meant to be used for clinical decisions.
+Dit is een technische demo. Het is niet bedoeld voor gebruik in de klinische praktijk.
 """
 import sqlite3
 from contextlib import closing
@@ -52,13 +52,13 @@ VELDEN = {
 AFRONDING_CODES = {"F"}
 
 
-#Titel van de pagina
+# Titel van de pagina, :orange[] zorgt ervoor dat de tekst in het oranje wordt weergegeven.
 st.set_page_config(page_title="Prognosegesprek met de mantelzorger", page_icon=":hospital:", layout="wide")
 st.title(":orange[Prognosegesprek] met de mantelzorger van een patiënt met een niercelcarcinoom")
 st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
 st.divider()  # scheidingslijn onder de kop
 
-# controleert of de benodigde bestanden bestaan, anders stopt de app met een foutmelding
+# Controleert of de benodigde bestanden bestaan, anders stopt de app met een foutmelding
 if not DB_FILE.exists():
     st.error("ehr.db not found. Run `python setup_database.py` first (see the README).")
     st.stop()
@@ -73,15 +73,14 @@ if not prediction.MODEL_FILE.exists():
 def get_model(file_modified_time):  # laadt het model een keer opnieuw wanneer model.keras wordt aangepast
     return prediction.load_model()
 
-
+# Laadt de patienten uit de database, als {id: {column: value}}. De patienten worden opnieuw geladen bij elke run, zodat de app altijd de laatste versie van de database gebruikt.
 def load_patients():
-    """Read all patients from the database, as {id: {column: value}}."""
     with closing(sqlite3.connect(DB_FILE)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM patient ORDER BY id").fetchall()
     return {row["id"]: dict(row) for row in rows}
 
-
+# error management: als er geen patienten zijn, of als het model niet kan worden geladen, of als de patienten niet passen bij het model, dan wordt er een foutmelding getoond en stopt de app.
 patients = load_patients()
 if not patients:
     st.warning("The database has no patients. Check database.sql and run setup_database.py.")
@@ -188,6 +187,7 @@ def resetten(pid, patient):
 for k in VELDEN:
     st.session_state.setdefault(f"{k}_{patient_id}", int(current_patient[k]))
 
+# with midden verzorgt de uitlijning van de "Wat als"-velden en de knoppen, zodat ze onder elkaar staan in het midden van de pagina.
 with midden:
     with st.expander("Wat als de waarden anders zijn? (optioneel)", expanded=True):
         st.caption("Pas de waarden aan en klik op 'Bereken opnieuw'. "
