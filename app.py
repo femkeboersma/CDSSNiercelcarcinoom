@@ -1,12 +1,5 @@
 """A toy clinical decision support app.
-
 Run:  streamlit run app.py
-
-How Streamlit works, in one sentence: every time the user clicks or types
-something, Streamlit runs this whole script again from top to bottom and
-redraws the page. Things that must survive between runs (like a value the
-user typed) are kept in st.session_state.
-
 This is a technical demo. It is NOT meant to be used for clinical decisions.
 """
 import sqlite3
@@ -15,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import streamlit as st
+import pandas as pd
 
 import prediction
 from richtlijnen import kennisgebaseerd_advies, pictogram_html
@@ -40,20 +34,29 @@ CODES = {
     "gedrag": {2: "In situ", 3: "Kwaadaardig"},
     "later": {1: "Links", 2: "Rechts"},
     "diag_basis": {
-        0: "alleen overlijdensverklaring beschikbaar",
-        1: "alleen klinisch onderzoek (anamnese en lichamelijk onderzoek)",
-        2: "klinisch-diagnostische onderzoeken, exploratieve chirurgie of obductie (zonder microscopisch bevestiging)",
-        4: "specifieke biochemische en/of immunologische laboratoriumonderzoeken",
-        5: "hematologische (beenmergcytologie = bijvoorbeeld beenmergpunctie, bloeduitstrijk) of cytologische bevestiging van de primaire tumor of metastasen, of microscopische bevestiging zeker, maar onduidelijk of dit cytologie of histologie betreft",
-        6: "histologische bevestiging uitsluitend van metastase(n), inclusief bij obductie",
-        7: "histologische bevestiging van de primaire tumor, of onduidelijk of histologische bevestiging de primaire tumor of een metastase betreft, obductie (met histologische bevestiging)"
+        0: "Er is alleen een overlijdensverklaring beschikbaar",
+        1: "Er is tot op heden alleen klinisch onderzoek (anamnese en lichamelijk onderzoek) uitgevoerd",
+        2: "Er is al klinisch-diagnostisch onderzoek uitgevoerd, bijvoorbeeld: exploratieve chirurgie of obductie (maar zonder microscopisch bevestiging)",
+        4: "Er zijn specifieke biochemische en/of immunologische laboratoriumonderzoeken uitgevoerd",
+        5: "Er is hematologische of cytologische bevestiging van de primaire tumor of metastasen, of er is microscopische bevestiging, maar nog onduidelijk of dit cytologie of histologie betreft",
+        6: "Er is histologische bevestiging uitsluitend van metastase(n), inclusief bij obductie",
+        7: "Er is histologische bevestiging van de primaire tumor, of onduidelijk of histologische bevestiging de primaire tumor of een metastase betreft, obductie (met histologische bevestiging)"
     },
 }
+# Velden die de huisarts mag aanpassen, voor elke waarde geldt tussen de haakjes: (label, minimum, maximum)
+VELDEN = {
+    "leeft": ("Leeftijd (jaar)", 0, 120),
+    "tum_afm": ("Tumorgrootte (mm)", 0, 999),
+    "pos_lymf": ("Aantal positieve lymfeklieren", 0, 99),
+}
+AFRONDING_CODES = {"F"}
+
 
 #Titel van de pagina
-st.set_page_config(page_title="Prognose hulp voor patiënten met een niercelcarcinoom", page_icon=":hospital:", layout="centered")
-st.title("Prognose hulp voor het gesprek met mantelzorgers van patiënten met een niercelcarcinoom")
+st.set_page_config(page_title="Prognosegesprek met de mantelzorger", page_icon=":hospital:", layout="wide")
+st.title(":orange[Prognosegesprek] met de mantelzorger van een patiënt met een niercelcarcinoom")
 st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
+st.divider()  # scheidingslijn onder de kop
 
 # controleert of de benodigde bestanden bestaan, anders stopt de app met een foutmelding
 if not DB_FILE.exists():
@@ -110,63 +113,94 @@ if problem:
 
 
 
-# Je kunt hier een patient kiezen uit een dropdown, en de gegevens van die patient worden getoond.
-patient_id = st.selectbox(
-    "Kies een patiënt",
-    options=list(patients),
-    format_func=lambda pid: patients[pid]["display_name"],
-)
+# Welke patiënt is gekozen? None = nog niemand, dan toont het programma het welkomstscherm
+st.session_state.setdefault("patient_id", None)
+
+# Start-knop, het programma onthoudt de gekozen patiënt in st.session_state.patient_id
+def start_gesprek():
+    st.session_state.patient_id = st.session_state.keuze_welkom
+
+# Knop rechtsboven, leid de gebruiker terug naar het welkomstscherm.
+def kies_andere_patient():
+    st.session_state.patient_id = None
+    st.session_state.pop("keuze_welkom", None)
+
+
+# Welkomstscherm
+if st.session_state.patient_id is None:
+    st.subheader("Welkom")
+    st.write("Met deze tool kunt u zich voorbereiden op het gesprek met de mantelzorger "
+             "van een patiënt met een niercelcarcinoom. Kies hieronder een patiënt om te beginnen.")
+    keuze = st.selectbox(
+        "Kies een patiënt",
+        options=list(patients),
+        index=None,
+        placeholder="Selecteer een patiënt...",
+        format_func=lambda pid: patients[pid]["display_name"],
+        key="keuze_welkom",
+    )
+    st.button("Start", type="primary", disabled=keuze is None, on_click=start_gesprek)
+    st.stop()  # de rest van de pagina wordt pas getoond na het kiezen
+
+# Hoofdscherm
+patient_id = st.session_state.patient_id
 current_patient = patients[patient_id]
 
-resultaat = st.container()  # wordt hieronder gevuld, maar staat bovenaan de pagina
+_, knop_kolom = st.columns([3, 1])
+knop_kolom.button("Andere patiënt kiezen", on_click=kies_andere_patient, use_container_width=True)
+
+# Twee kolommen: links de patiëntgegevens, rechts het gesprek en de "Wat als"-velden
+links, midden, rechts = st.columns([1, 2, 1])
+
+with midden:
+    resultaat = st.container(border=True)  # wordt hieronder gevuld, maar staat bovenaan in het midden
+
+with rechts:
+    zijblok = st.container(border=True)  # geeft mogelijkheid voor opstart voor het gesprek en afronding van het gesprek als ondersteuning voor de huisarts.
 
 # Gegevens van de patiënt in gewoon Nederlands
-st.subheader("Gegevens van de patiënt")
 weergave = {}
 for kolom, label in LABELS.items():
     waarde = current_patient[kolom]
     waarde = CODES.get(kolom, {}).get(waarde, waarde)
     weergave[label] = str(waarde)
-st.table({"Gegeven": list(weergave.keys()), "Waarde": list(weergave.values())})
 
-# Velden die de huisarts mag aanpassen: sleutel -> (label, minimum, maximum)
-VELDEN = {
-    "leeft": ("Leeftijd (jaar)", 0, 120),
-    "tum_afm": ("Tumorgrootte (mm)", 0, 999),
-    "pos_lymf": ("Aantal positieve lymfeklieren", 0, 99),
-}
+with links:
+    st.subheader(":orange[Gegevens van de patiënt]")
+    tabel = pd.DataFrame({"Gegeven": weergave.keys(), "Waarde": weergave.values()})
+    st.table(tabel.set_index("Gegeven"))
 
-
+# Beschrijft de functies van de knoppen in het "Wat als"-formulier.
+# De ingevulde waarden worden bewaard in st.session_state, zodat ze bij een volgende run van de app nog beschikbaar zijn.
+# Submit-knop, zorgt ervoor dat de ingevulde waarden voor de patient bewaard blijven in st.session_state, hierdoor kunnen ze worden gebruikt in de "nieuwe voorspelling".
 def toepassen(pid):
-    """Submit-knop: bewaar de ingevulde waarden voor deze patiënt."""
     st.session_state[f"toegepast_{pid}"] = {
         k: st.session_state[f"{k}_{pid}"] for k in VELDEN
     }
 
-
+# reset-knop, herstelt de waarden van de patiënt naar de oorspronkelijke waarden uit de database, en verwijdert de aangepaste waarden uit st.session_state
 def resetten(pid, patient):
-    """Reset-knop: zet de velden terug op de waarden uit de database."""
     for k in VELDEN:
         st.session_state[f"{k}_{pid}"] = int(patient[k])
     st.session_state.pop(f"toegepast_{pid}", None)
-
 
 # Startwaarden uit de database (alleen als het veld nog niet bestaat)
 for k in VELDEN:
     st.session_state.setdefault(f"{k}_{patient_id}", int(current_patient[k]))
 
-with st.expander("Wat als de waarden anders zijn? (optioneel)", expanded=True):
-    st.caption("Pas de waarden aan en klik op 'Bereken opnieuw'. "
-               "Er wordt niets opgeslagen in de database.")
-    with st.form(f"wat_als_{patient_id}"):
-        for k, (label, minimum, maximum) in VELDEN.items():
-            st.number_input(label, min_value=minimum, max_value=maximum,
-                            key=f"{k}_{patient_id}")
-        knop1, knop2 = st.columns(2)
-        knop1.form_submit_button("Bereken opnieuw", type="primary",
-                                 on_click=toepassen, args=(patient_id,))
-        knop2.form_submit_button("Terug naar oorspronkelijke waarden",
-                                 on_click=resetten, args=(patient_id, current_patient))
+with midden:
+    with st.expander("Wat als de waarden anders zijn? (optioneel)", expanded=True):
+        st.caption("Pas de waarden aan en klik op 'Bereken opnieuw'. "
+                "Er wordt niets opgeslagen in de database.")
+        with st.form(f"wat_als_{patient_id}"):
+            for k, (label, minimum, maximum) in VELDEN.items():
+                st.number_input(label, min_value=minimum, max_value=maximum,
+                                key=f"{k}_{patient_id}")
+            knop1, knop2 = st.columns(2)
+            knop1.form_submit_button("Bereken opnieuw", type="primary",
+                                    on_click=toepassen, args=(patient_id,))
+            knop2.form_submit_button("Terug naar oorspronkelijke waarden",
+                                    on_click=resetten, args=(patient_id, current_patient))
 
 # Alleen de toegepaste waarden gaan naar het model
 aangepast = dict(current_patient)
@@ -174,7 +208,7 @@ aangepast.update(st.session_state.get(f"toegepast_{patient_id}", {}))
 
 # Voorspelling berekenen en bovenaan tonen
 def voorspel_kans_overlijden(patient):
-    p = float(prediction.get_prediction(model, aangepast, None))
+    p = float(prediction.get_prediction(model, patient, None))
     return p if KANS_IS_OVERLIJDEN else 1 - p
 
 # Kans met de oorspronkelijke en met de aangepaste waarden, om te vergelijken
@@ -182,9 +216,9 @@ kans_orig = float(prediction.get_prediction(model, current_patient, None))
 kans_orig = kans_orig if KANS_IS_OVERLIJDEN else 1 - kans_orig
 kans_nu = voorspel_kans_overlijden(aangepast)
 
-#kennisgebaseerde deel
+# kennisgebaseerde deel, in het midden
 with resultaat:
-    st.subheader(f"Gesprek met de mantelzorger van {current_patient['display_name']}")
+    st.subheader(f":orange[Gesprek met de mantelzorger van] {current_patient['display_name']}")
 
     def ja_nee(vraag, sleutel):
         antwoord = st.radio(vraag, ["Ja", "Nee"], index=None, horizontal=True, key=f"{sleutel}_{patient_id}")
@@ -197,7 +231,7 @@ with resultaat:
     if toestemming and kan_ontvangen:
         wil_prognose = ja_nee("Wil de mantelzorger informatie over de prognose?", "k3")
 
-# advies wordt pas getoond als hele flowchart is beantwoord
+    # advies wordt pas getoond als hele flowchart is beantwoord
     klaar = (toestemming is False or (toestemming and kan_ontvangen is False) or (toestemming and kan_ontvangen and wil_prognose is not None))
 
     if not klaar:
@@ -205,8 +239,10 @@ with resultaat:
     else:
         r = kennisgebaseerd_advies(patient=aangepast, toestemming=toestemming, kan_ontvangen=bool(kan_ontvangen), wil_prognose=bool(wil_prognose), voorspel_kans=voorspel_kans_overlijden)
 
-        st.subheader("Advies")
+        st.subheader(":orange[Advies]")
         for a in r.adviezen:
+            if a.code in AFRONDING_CODES:
+                continue  # de afronding staat in het rechterblok
             if a.code == "E":
                 st.success(f"**{a.conclusie}**")
                 st.markdown(pictogram_html(r.n_in_leven), unsafe_allow_html=True)
@@ -216,12 +252,40 @@ with resultaat:
                         f"Kans op overlijden: {kans_nu:.1%} (met de oorspronkelijke "
                         f"waarden: {kans_orig:.1%})."
                     )
-                # if aangepast != current_patient:
-                #     st.warning("Let op: dit is berekend met aangepaste waarden.")
                 st.info(a.advies)
             else:
                 st.info(f"**{a.conclusie}**\n\n{a.advies}")
             st.caption(f"Advies {a.code} - Waarom: {a.reden} - Bron: {a.bron}")
 
-            with st.expander("Hoe komt dit advies tot stand?"):
-                st.write("Route door de flowchart: " + " → ".join(r.pad))
+# Rechterblok: eerst de opstart, na het advies de afronding
+# Rechterblok: eerst de opstart, daarna de afronding die bij de antwoorden past
+with zijblok:
+    if not klaar:
+        st.subheader(":orange[Opstart van het gesprek]")
+        st.write("- Zorg voor een rustige plek en voldoende tijd.\n"
+                 "- Controleer of de patiënt toestemming heeft gegeven voor het delen van medische informatie met de mantelzorger.\n"
+                 "- Vraag eerst wat de mantelzorger al weet. \n"
+                 "- Doorloop de vragen op het formulier")
+    else:
+        st.subheader(":orange[Afronding van het gesprek]")
+
+        # De volgorde van de checks volgt de volgorde van de vragen
+        if toestemming is False:
+            st.write("- Deel geen medische informatie met de mantelzorger.\n"
+                     "- Luister wel naar de mantelzorger en erken diens zorgen.\n"
+                     "- Bespreek met de patiënt of toestemming later mogelijk is.")
+        elif kan_ontvangen is False:
+            st.write("- Geef nu geen informatie, maar laat weten dat er later ruimte voor is.\n"
+                     "- Plan een vervolggesprek.\n"
+                     "- Vraag wat de mantelzorger nu nodig heeft en wijs op ondersteuning.")
+        elif wil_prognose is False:
+            st.write("- Respecteer dat de mantelzorger geen informatie over de prognose wil.\n"
+                     "- Laat weten dat de mogelijkheid blijft bestaan om hier later op terug te komen.\n"
+                     "- Bespreek wat de mantelzorger zelf nodig heeft en wijs op ondersteuning.")
+        else:
+            st.write("- Vraag wat de mantelzorger van de informatie heeft begrepen.\n"
+                     "- Geef ruimte voor emoties en vragen.\n"
+                     "- Maak afspraken voor een vervolggesprek en wijs op ondersteuning.")
+
+        with st.expander("Hoe komt dit advies tot stand?"):
+            st.write("Route door de flowchart: " + " → ".join(r.pad))
