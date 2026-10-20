@@ -55,8 +55,8 @@ AFRONDING_CODES = {"F"}
 
 
 # Titel van de pagina, :green[] zorgt ervoor dat de tekst in het oranje wordt weergegeven.
-st.set_page_config(page_title="Prognosegesprek met de mantelzorger", page_icon=":hospital:", layout="wide")
-st.title(":green[Prognosegesprek] met de mantelzorger van een patiënt met een niercelcarcinoom")
+st.set_page_config(page_title=":green[SamenInZicht] Prognosegesprek met de mantelzorger", page_icon=":hospital:", layout="wide")
+st.title(":green[SamenInZicht] Prognosegesprek met de mantelzorger van een patiënt met een niercelcarcinoom")
 st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
 st.divider()  # scheidingslijn onder de kop
 
