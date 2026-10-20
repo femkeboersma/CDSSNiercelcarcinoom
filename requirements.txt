@@ -1,2 +1,6 @@
-streamlit>=1.37
-tensorflow>=2.16
+streamlit==1.66.0
+tensorflow==2.21.0
+keras==3.15.1
+numpy
+pandas
+

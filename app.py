@@ -5,6 +5,8 @@ Dit is een technische demo. Het is niet bedoeld voor gebruik in de klinische pra
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+import subprocess
+import sys
 
 import numpy as np
 import streamlit as st
@@ -59,9 +61,9 @@ st.caption("Technische demo. Niet bedoeld voor klinische beslissingen.")
 st.divider()  # scheidingslijn onder de kop
 
 # Controleert of de benodigde bestanden bestaan, anders stopt de app met een foutmelding
+# Bestaat de database nog niet (bijvoorbeeld op de server), maak hem dan aan met setup_database.py
 if not DB_FILE.exists():
-    st.error("ehr.db not found. Run `python setup_database.py` first (see the README).")
-    st.stop()
+    subprocess.run([sys.executable, str(Path(__file__).parent / "setup_database.py")], check=True)
 if not prediction.MODEL_FILE.exists():
     st.error("model.keras not found. Train your model and save it as model.keras "
              "in the same folder as app.py (see the README).")
@@ -110,8 +112,6 @@ if problem:
     st.error("Your model does not fit this app yet. " + problem)
     st.stop()
 
-
-
 # Welke patiënt is gekozen? None = nog niemand, dan toont het programma het welkomstscherm
 st.session_state.setdefault("patient_id", None)
 
@@ -123,7 +123,6 @@ def start_gesprek():
 def kies_andere_patient():
     st.session_state.patient_id = None
     st.session_state.pop("keuze_welkom", None)
-
 
 # Welkomstscherm
 if st.session_state.patient_id is None:
